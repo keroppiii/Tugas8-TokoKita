@@ -34,7 +34,7 @@ lib/
 
 ---
 
-## Penjelasan Kode
+## Penjelasan 
 
 #### **1. Halaman Login**
 Halaman ini digunakan untuk login ke aplikasi. Pengguna memasukkan email dan password, kemudian aplikasi akan memvalidasi input sebelum melakukan proses login.
@@ -143,4 +143,4 @@ e. Setelah update berhasil, menampilkan SnackBar dan navigasi kembali
 ---
 | Form Create                 | Form Edit                      | Delete Produk               |
 |-----------------------------|--------------------------------|-----------------------------|
-| ![Create](assets/create.jpg)| ![Setting](assets/settings.jpg)| ![Delete](assets/delete.jpg)|
+| ![Create](assets/create.jpg)| ![Edit](assets/edit.jpg)| ![Delete](assets/delete.jpg)|
