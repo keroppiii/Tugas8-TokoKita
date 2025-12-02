@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
-import 'dart:convert';
-import 'package:tokokita/model/login.dart';
-import 'package:tokokita/ui/registrasi_page.dart';
+import 'package:tokokita/bloc/login_bloc.dart';
+import 'package:tokokita/helpers/user_info.dart';
 import 'package:tokokita/ui/produk_page.dart';
+import 'package:tokokita/ui/registrasi_page.dart';
+import 'package:tokokita/widget/success_dialog.dart';
+import 'package:tokokita/widget/warning_dialog.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({Key? key}) : super(key: key);
@@ -16,75 +17,14 @@ class _LoginPageState extends State<LoginPage> {
   final _formKey = GlobalKey<FormState>();
   bool _isLoading = false;
 
-  final _emailTextboxController = TextEditingController();
-  final _passwordTextboxController = TextEditingController();
-
-  Future<void> _login() async {
-    if (_formKey.currentState!.validate()) {
-      setState(() {
-        _isLoading = true;
-      });
-
-      await Future.delayed(const Duration(seconds: 2));
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Login Berhasil! (Demo Mode)')),
-      );
-      
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const ProdukPage()),
-      );
-
-      setState(() {
-        _isLoading = false;
-      });
-      
-      /* 
-      try {
-        final response = await http.post(
-          Uri.parse('http://localhost/toko-api/public/login'),
-          headers: {'Content-Type': 'application/json'},
-          body: jsonEncode({
-            'email': _emailTextboxController.text,
-            'password': _passwordTextboxController.text,
-          }),
-        );
-
-        final data = jsonDecode(response.body);
-        final login = Login.fromJson(data);
-
-        if (login.status == true) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Login Berhasil!')),
-          );
-          Navigator.pushReplacement(
-            context,
-            MaterialPageRoute(builder: (context) => const ProdukPage()),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Login Gagal: ${login.message}')),
-          );
-        }
-      } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error: $e')),
-        );
-      } finally {
-        setState(() {
-          _isLoading = false;
-        });
-      }
-      */
-    }
-  }
+  final _emailController = TextEditingController();
+  final _passwordController = TextEditingController();
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text("Login Fatim"),
+        title: const Text("Login"),
       ),
       body: SingleChildScrollView(
         child: Padding(
@@ -92,8 +32,8 @@ class _LoginPageState extends State<LoginPage> {
           child: Form(
             key: _formKey,
             child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const SizedBox(height: 50),
                 _emailTextField(),
                 const SizedBox(height: 16),
                 _passwordTextField(),
@@ -109,6 +49,8 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
+  // --- WIDGET INPUT ---
+
   Widget _emailTextField() {
     return TextFormField(
       decoration: const InputDecoration(
@@ -116,10 +58,17 @@ class _LoginPageState extends State<LoginPage> {
         border: OutlineInputBorder(),
       ),
       keyboardType: TextInputType.emailAddress,
-      controller: _emailTextboxController,
+      controller: _emailController,
       validator: (value) {
         if (value!.isEmpty) {
           return 'Email harus diisi';
+        }
+        // Validasi format email menggunakan Regex
+        Pattern pattern =
+            r'^(([^<>()[\]\\.,;:\s@\"]+(\.[^<>()[\]\\.,;:\s@\"]+)*)|(\".+\"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$';
+        RegExp regex = RegExp(pattern.toString());
+        if (!regex.hasMatch(value)) {
+          return "Email tidak valid";
         }
         return null;
       },
@@ -133,35 +82,97 @@ class _LoginPageState extends State<LoginPage> {
         border: OutlineInputBorder(),
       ),
       keyboardType: TextInputType.text,
-      obscureText: true,
-      controller: _passwordTextboxController,
+      obscureText: true, // Menyembunyikan teks password
+      controller: _passwordController,
       validator: (value) {
         if (value!.isEmpty) {
           return "Password harus diisi";
+        }
+        if (value.length < 6) {
+          return "Password minimal 6 karakter";
         }
         return null;
       },
     );
   }
 
+  // --- TOMBOL & LOGIKA ---
+
   Widget _buttonLogin() {
     return ElevatedButton(
-      onPressed: _isLoading ? null : _login,
       child: _isLoading 
-          ? const CircularProgressIndicator(color: Colors.white)
-          : const Text("Login"),
-      style: ElevatedButton.styleFrom(
-        minimumSize: const Size(double.infinity, 50),
-      ),
+        ? const SizedBox(
+            height: 20,
+            width: 20,
+            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+          ) 
+        : const Text("Login"),
+      onPressed: () {
+        var validate = _formKey.currentState!.validate();
+        if (validate) {
+          if (!_isLoading) _submit();
+        }
+      },
     );
   }
+
+  void _submit() {
+    _formKey.currentState!.save();
+    setState(() {
+      _isLoading = true;
+    });
+
+    LoginBloc.login(
+      email: _emailController.text,
+      password: _passwordController.text,
+    ).then((value) async {
+      // 1. Simpan Token & UserID ke SharedPreferences
+      await UserInfo().setToken(value.token.toString());
+      await UserInfo().setUserID(int.parse(value.userID.toString()));
+
+      // 2. Tampilkan Dialog Sukses
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) => SuccessDialog(
+          description: "Login Berhasil",
+          okClick: () {
+            // 3. Pindah ke Halaman Produk (Hapus history halaman login)
+            Navigator.pop(context);
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const ProdukPage()),
+            );
+          },
+        ),
+      );
+      
+      setState(() {
+        _isLoading = false;
+      });
+    }, onError: (error) {
+      // Tampilkan Dialog Gagal
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (BuildContext context) => const WarningDialog(
+          description: "Login Gagal, silahkan cek email atau password anda",
+        ),
+      );
+      setState(() {
+        _isLoading = false;
+      });
+    });
+  }
+
+  // --- MENU TAMBAHAN ---
 
   Widget _menuRegistrasi() {
     return Center(
       child: InkWell(
         child: const Text(
-          "Belum punya akun? Registrasi",
-          style: TextStyle(color: Colors.blue, fontSize: 16),
+          "Registrasi",
+          style: TextStyle(color: Colors.blue),
         ),
         onTap: () {
           Navigator.push(
